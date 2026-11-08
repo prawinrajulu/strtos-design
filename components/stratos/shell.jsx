@@ -41,6 +41,7 @@ const NAV_EMPLOYEE = [
   { label: 'My Tasks', icon: ClipboardList, to: '/tasks' },
   { label: 'Reports', icon: FileText, to: '/reports' },
   { label: 'Knowledge Base', icon: BookOpen, to: '/knowledge-base' },
+  { label: 'Google Meet', icon: Video, to: '/meetings' },
   { label: 'My Profile', icon: UserCircle, to: '/my-profile' },
 ]
 

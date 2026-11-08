@@ -33,13 +33,13 @@ export function NotificationsBell() {
   const open = async (n) => {
     await notificationService.update(n.id, { is_read: true }); load()
     let dest = '/dashboard'
-    if (n.resource_type === 'meeting') dest = role === 'owner' ? '/meetings' : '/dashboard'
+    if (n.resource_type === 'meeting') dest = '/meetings'
     else if (n.resource_type === 'task') dest = '/tasks'
     else if (n.resource_type === 'client') dest = role === 'owner' ? '/clients' : '/projects'
     navigate(dest)
   }
   return (
-    <DropdownMenu onOpenChange={(o) => { if (o) { notificationService.markAllRead().then(load) } }}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="relative text-muted-foreground"><Bell className="h-5 w-5" />{unread > 0 && <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[9px] font-bold text-white">{unread}</span>}</Button>
       </DropdownMenuTrigger>
@@ -77,8 +77,173 @@ export function TodaysMeetings() {
   )
 }
 
+// ============================ EMPLOYEE MEETINGS PAGE ============================
+export function EmployeeMeetingsPage() {
+  const { user, navigate } = useApp()
+  const [meetings, setMeetings] = useState(null)
+
+  const load = () => {
+    if (!user?.id) return
+    meetingService.forEmployee(user.id)
+      .then((all) => {
+        const active = (all || [])
+          .filter((m) => m.status !== 'cancelled')
+          .sort((a, b) => {
+            const aTime = new Date(`${a.meeting_date}T${a.meeting_time || '00:00'}`).getTime()
+            const bTime = new Date(`${b.meeting_date}T${b.meeting_time || '00:00'}`).getTime()
+            return aTime - bTime
+          })
+        setMeetings(active)
+      })
+      .catch(() => setMeetings([]))
+  }
+
+  useEffect(() => { load() }, [user?.id])
+
+  const today = new Date().toISOString().slice(0, 10)
+  const upcoming = (meetings || []).filter((m) => m.meeting_date >= today)
+  const past = (meetings || []).filter((m) => m.meeting_date < today)
+
+  const MeetingCard = ({ meeting, pastMeeting = false }) => (
+    <GlowCard hover={false} className="p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-blue-500/20 to-violet-500/20 text-violet-300">
+              <Video className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <h3 className="truncate font-display font-semibold">{meeting.title}</h3>
+              <p className="text-xs text-muted-foreground">Scheduled by your owner</p>
+            </div>
+          </div>
+        </div>
+        <span className={cn(
+          'shrink-0 rounded-full border px-2.5 py-1 text-[11px] font-medium',
+          meeting.meeting_date === today
+            ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+            : pastMeeting
+              ? 'border-white/10 bg-white/[0.03] text-muted-foreground'
+              : 'border-violet-500/30 bg-violet-500/10 text-violet-200'
+        )}>
+          {meeting.meeting_date === today ? 'Today' : pastMeeting ? 'Past' : 'Upcoming'}
+        </span>
+      </div>
+
+      {meeting.description && (
+        <p className="mt-4 line-clamp-2 text-sm text-muted-foreground">{meeting.description}</p>
+      )}
+
+      <div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
+          <CalendarClock className="h-4 w-4 text-violet-300" />
+          <span>{fmtDate(meeting.meeting_date)}</span>
+        </div>
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-sm">
+          <Clock className="h-4 w-4 text-cyan-300" />
+          <span>{meeting.meeting_time}</span>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <span className="text-xs text-muted-foreground">With: Owner</span>
+        {meeting.meet_url && !pastMeeting && (
+          <Button asChild size="sm" className="bg-gradient-to-r from-blue-500 to-violet-600 text-white">
+            <a href={meeting.meet_url} target="_blank" rel="noreferrer">
+              <Video className="mr-2 h-4 w-4" />
+              Join Google Meet
+            </a>
+          </Button>
+        )}
+        {meeting.meet_url && pastMeeting && (
+          <Button asChild size="sm" variant="outline" className="border-white/15">
+            <a href={meeting.meet_url} target="_blank" rel="noreferrer">
+              <Video className="mr-2 h-4 w-4" />
+              Open Meet
+            </a>
+          </Button>
+        )}
+      </div>
+    </GlowCard>
+  )
+
+  return (
+    <div className="space-y-6">
+      <PageHeader
+        icon={Video}
+        title="Google Meet"
+        subtitle="Join meetings scheduled for you by your agency owner."
+        actions={
+          <Button variant="outline" onClick={() => navigate('/dashboard')} className="border-white/15">
+            Back to Dashboard
+          </Button>
+        }
+      />
+
+      {meetings === null ? (
+        <div className="grid gap-4 lg:grid-cols-2">
+          <GlowCard hover={false} className="h-40 animate-pulse" />
+          <GlowCard hover={false} className="h-40 animate-pulse" />
+        </div>
+      ) : meetings.length === 0 ? (
+        <EmptyState
+          icon={Video}
+          title="No meetings scheduled"
+          description="Your owner hasn't scheduled any Google Meet sessions for you yet."
+        />
+      ) : (
+        <div className="space-y-8">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-display text-lg font-semibold">Upcoming Meetings</h2>
+                <p className="text-xs text-muted-foreground">Meetings you can join from STRATOS.</p>
+              </div>
+              <span className="rounded-full border border-violet-500/20 bg-violet-500/10 px-2.5 py-1 text-xs text-violet-200">
+                {upcoming.length}
+              </span>
+            </div>
+
+            {upcoming.length === 0 ? (
+              <GlowCard hover={false} className="p-6">
+                <p className="text-sm text-muted-foreground">No upcoming meetings.</p>
+              </GlowCard>
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                {upcoming.map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} />)}
+              </div>
+            )}
+          </section>
+
+          {past.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="font-display text-lg font-semibold">Previous Meetings</h2>
+                  <p className="text-xs text-muted-foreground">Your previously scheduled sessions.</p>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/[0.03] px-2.5 py-1 text-xs text-muted-foreground">
+                  {past.length}
+                </span>
+              </div>
+              <div className="grid gap-4 lg:grid-cols-2">
+                {past.slice(0, 6).map((meeting) => <MeetingCard key={meeting.id} meeting={meeting} pastMeeting />)}
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ============================ OWNER MEETINGS PAGE ============================
 export function MeetingsPage() {
+  const { role } = useApp()
+  return role === 'employee' ? <EmployeeMeetingsPage /> : <OwnerMeetingsPage />
+}
+
+function OwnerMeetingsPage() {
   const [meetings, setMeetings] = useState(null)
   const [staff, setStaff] = useState([])
   const [open, setOpen] = useState(false)

@@ -210,6 +210,8 @@ function EmployeeDashboard() {
           )}
         </GlowCard>
       </div>
+
+      <TodaysMeetings />
     </div>
   )
 }
